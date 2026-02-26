@@ -1,0 +1,581 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card mb-4">
+            <div class="card-header">
+                搜尋條件
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('index') }}" id="searchForm">
+                    <div class="mb-3">
+                        <label for="search" class="form-label">關鍵字搜尋</label>
+                        <input type="text" class="form-control" id="search" name="search" value="{{ search or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="max_price" class="form-label">最高價格</label>
+                        <input type="number" class="form-control" id="max_price" name="max_price" min="0" step="1" value="{{ max_price or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="distance" class="form-label">最大距離 (公里)</label>
+                        <input type="number" class="form-control" id="distance" name="distance" min="0" step="0.1" value="{{ distance or '' }}">
+                        <div class="form-text" id="locationStatus">請允許位置存取以使用距離搜尋</div>
+                    </div>
+                    <!-- 隱藏的位置欄位 -->
+                    <input type="hidden" id="user_lat" name="user_lat" value="{{ user_lat or '' }}">
+                    <input type="hidden" id="user_lon" name="user_lon" value="{{ user_lon or '' }}">
+                    
+                    <div class="d-grid gap-2">
+                    {% if current_user.is_authenticated and not current_user.is_store %}
+                        <button type="button" class="btn btn-success w-100" onclick="getRecommendations()" id="recommendBtn">
+                            <i class="fas fa-magic me-1"></i> 取得個人化推薦
+                        </button>
+                        <button type="button" class="btn btn-info w-100 mt-2" onclick="getAIRecommendations()" id="aiRecommendBtn">
+                            <i class="fas fa-robot me-1"></i> AI建議
+                        </button>
+                        {% endif %}
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-search me-1"></i> 搜尋
+                                </button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-secondary w-100" onclick="resetForm()">
+                                    <i class="fas fa-redo me-1"></i> 重置
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <!-- AI推薦結果 -->
+        <div id="recommendationsContainer" class="mb-4" style="display: none;">
+            <div class="card">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    AI推薦商品
+                    <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="hideRecommendations()"></button>
+                </div>
+                <div class="card-body">
+                    <h5 class="mb-3">個別推薦商品</h5>
+                    <div class="row" id="individualRecommendations">
+                        <!-- 個別推薦內容將由JavaScript動態插入 -->
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <h5 class="mb-3">套餐推薦</h5>
+                    <div class="row" id="setRecommendations">
+                        <!-- 套餐推薦內容將由JavaScript動態插入 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI建議 -->
+        <div id="aiRecommendationsContainer" class="mb-4" style="display: none;">
+            <div class="card">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    AI建議
+                    <button type="button" class="btn-close btn-close-white" aria-label="Close" onclick="hideAIRecommendations()"></button>
+                </div>
+                <div class="card-body">
+                    <pre id="aiRecommendationsContent" class="text-wrap"></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            {% for product in products %}
+            <div class="col">
+                <div class="card h-100 product-card-animation" style="animation-delay: {{ loop.index * 0.1 }}s;">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ product.name }}</h5>
+                        <p class="card-text">
+                            <strong>店家:</strong> {{ product.store.username }}<br>
+                            <strong>原價:</strong> ${{ "%.2f"|format(product.original_price) }}<br>
+                            <strong>折扣:</strong> {{ "%.0f"|format(product.discount_rate * 100) }}%<br>
+                            <strong>特價:</strong> ${{ "%.2f"|format(product.original_price * product.discount_rate) }}<br>
+                            <strong>數量:</strong> {{ product.quantity }}<br>
+                            <strong>地址:</strong> {{ product.address }}<br>
+                            <strong>期限:</strong> {{ product.expiry_date.strftime('%Y-%m-%d') }}
+                            {% if product.distance is not none %}
+                            <br><strong>距離:</strong> {{ product.distance }}公里
+                            {% elif distance and distance > 0 %}
+                            <br><span class="text-muted">無法計算距離</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="card-footer">
+                        <a href="{{ url_for('product_detail', product_id=product.id) }}" class="btn btn-info btn-sm">查看詳情</a>
+                        {% if current_user.is_authenticated and not current_user.is_store %}
+                        <button class="btn btn-primary btn-sm add-to-cart-btn" 
+                                onclick="addToCart({{ product.id }}, this)"
+                                data-product-id="{{ product.id }}">
+                            <i class="fas fa-cart-plus"></i>
+                            <span>加入購物車</span>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- 個別推薦商品卡片模板 -->
+<template id="individualRecommendationTemplate">
+    <div class="col-md-4 mb-3">
+        <div class="card h-100 border-success">
+            <div class="card-header bg-success text-white">
+                推薦指數: <span class="recommendation-score"></span>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title product-name"></h5>
+                <p class="card-text">
+                    <strong>原價:</strong> $<span class="original-price"></span><br>
+                    <strong>折扣:</strong> <span class="discount-rate"></span>%<br>
+                    <strong>特價:</strong> $<span class="discounted-price"></span><br>
+                    <strong>距離:</strong> <span class="distance"></span>公里<br>
+                    <strong>營養成分:</strong><br>
+                    <div class="nutrition-info small">
+                        <!-- 營養成分將由JavaScript動態插入 -->
+                    </div>
+                </p>
+            </div>
+            <div class="card-footer d-flex justify-content-between">
+                <a href="#" class="btn btn-info btn-sm product-detail-link">查看詳情</a>
+                {% if current_user.is_authenticated and not current_user.is_store %}
+                <button class="btn btn-primary btn-sm add-to-cart-btn" onclick="addToCart(0, this)" data-product-id="0">
+                    <i class="fas fa-cart-plus"></i>
+                    <span>加入購物車</span>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- 套餐推薦卡片模板 -->
+<template id="setRecommendationTemplate">
+    <div class="col-12 mb-3">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                套餐推薦指數: <span class="set-score"></span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5 class="card-title">套餐內容</h5>
+                        <div class="set-products">
+                            <!-- 套餐商品將由JavaScript動態插入 -->
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h5 class="card-title">套餐資訊</h5>
+                        <p class="card-text">
+                            <strong>總價:</strong> $<span class="total-price"></span><br>
+                            <strong>平均距離:</strong> <span class="avg-distance"></span>公里<br>
+                            <strong>營養總量:</strong><br>
+                            <div class="set-nutrition small">
+                                <!-- 營養成分將由JavaScript動態插入 -->
+                            </div>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                {% if current_user.is_authenticated and not current_user.is_store %}
+                <button class="btn btn-primary btn-sm add-all-to-cart-btn">
+                    <i class="fas fa-cart-plus"></i>
+                    <span>加入所有商品到購物車</span>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+// 頁面載入時檢查位置權限
+document.addEventListener('DOMContentLoaded', function() {
+    // 只有當沒有用戶位置參數時才檢查位置
+    if (!document.getElementById('user_lat').value || !document.getElementById('user_lon').value) {
+        checkLocation();
+    }
+});
+
+// 檢查位置權限並獲取位置
+function checkLocation() {
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            // 更新隱藏欄位
+            document.getElementById('user_lat').value = position.coords.latitude;
+            document.getElementById('user_lon').value = position.coords.longitude;
+            
+            // 更新狀態訊息
+            document.getElementById('locationStatus').textContent = '✓ 已獲取位置資訊';
+            document.getElementById('locationStatus').className = 'form-text text-success';
+            
+            // 只有當表單中有距離參數且是首次載入頁面時才提交表單
+            const urlParams = new URLSearchParams(window.location.search);
+            if (document.getElementById('distance').value && !urlParams.has('user_lat')) {
+                document.getElementById('searchForm').submit();
+            }
+        }, function(error) {
+            handleLocationError(error);
+        });
+    } else {
+        document.getElementById('locationStatus').textContent = '您的瀏覽器不支援位置服務';
+        document.getElementById('locationStatus').className = 'form-text text-warning';
+    }
+}
+
+// 處理位置錯誤
+function handleLocationError(error) {
+    let message = '';
+    switch(error.code) {
+        case error.PERMISSION_DENIED:
+            message = '未取得位置權限，推薦將不考慮距離因素';
+            break;
+        case error.POSITION_UNAVAILABLE:
+            message = '無法獲取位置資訊，推薦將不考慮距離因素';
+            break;
+        case error.TIMEOUT:
+            message = '獲取位置超時，推薦將不考慮距離因素';
+            break;
+        default:
+            message = '發生未知錯誤，推薦將不考慮距離因素';
+    }
+    document.getElementById('locationStatus').textContent = message;
+    document.getElementById('locationStatus').className = 'form-text text-warning';
+    
+    // 清除位置資訊
+    document.getElementById('user_lat').value = '';
+    document.getElementById('user_lon').value = '';
+}
+
+// 重置表單
+function resetForm() {
+    document.getElementById('search').value = '';
+    document.getElementById('max_price').value = '';
+    document.getElementById('distance').value = '';
+    document.getElementById('user_lat').value = '';
+    document.getElementById('user_lon').value = '';
+    document.getElementById('locationStatus').textContent = '請允許位置存取以使用距離搜尋';
+    document.getElementById('locationStatus').className = 'form-text';
+    hideRecommendations(); // Hide personalized recommendations
+    hideAIRecommendations(); // Hide AI recommendations
+    document.getElementById('searchForm').submit(); // Submit to refresh product list
+}
+
+// 隱藏個人化推薦
+function hideRecommendations() {
+    document.getElementById('recommendationsContainer').style.display = 'none';
+    document.getElementById('recommendationsContainer').classList.remove('recommendation-reveal');
+}
+
+// 顯示AI建議
+function showAIRecommendations() {
+    const aiContainer = document.getElementById('aiRecommendationsContainer');
+    aiContainer.style.display = 'block';
+    aiContainer.classList.add('recommendation-reveal');
+}
+
+// 隱藏AI建議
+function hideAIRecommendations() {
+    const aiContainer = document.getElementById('aiRecommendationsContainer');
+    aiContainer.style.display = 'none';
+    aiContainer.classList.remove('recommendation-reveal');
+}
+
+// 取得AI建議
+async function getAIRecommendations() {
+    const aiRecommendBtn = document.getElementById('aiRecommendBtn');
+    aiRecommendBtn.disabled = true; // Disable button during request
+    aiRecommendBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 載入中...';
+
+    try {
+        const response = await fetch('/get_ai_recommendations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}), // No specific data needed for this endpoint yet
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            document.getElementById('aiRecommendationsContent').innerHTML = data.recommendations.replace(/\n/g, '<br>');
+            showAIRecommendations();
+            hideRecommendations(); // Hide personalized recommendations when AI recommendations are shown
+        } else {
+            alert('AI建議失敗: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error fetching AI recommendations:', error);
+        alert('取得AI建議時發生錯誤。');
+    } finally {
+        aiRecommendBtn.disabled = false; // Re-enable button
+        aiRecommendBtn.innerHTML = '<i class="fas fa-robot me-1"></i> AI建議';
+    }
+}
+
+async function getRecommendations() {
+    const userLat = document.getElementById('user_lat').value;
+    const userLon = document.getElementById('user_lon').value;
+    const maxPrice = document.getElementById('max_price').value;
+
+    try {
+        const response = await fetch('/get_recommendations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                latitude: userLat ? parseFloat(userLat) : null,
+                longitude: userLon ? parseFloat(userLon) : null,
+                max_price: maxPrice ? parseFloat(maxPrice) : null
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('推薦請求失敗');
+        }
+
+        const data = await response.json();
+        displayRecommendations(data);
+    } catch (error) {
+        console.error('Error:', error);
+        alert('獲取推薦時發生錯誤: ' + error.message);
+    }
+}
+
+function displayRecommendations(data) {
+    const individualContainer = document.getElementById('individualRecommendations');
+    const setContainer = document.getElementById('setRecommendations');
+    individualContainer.innerHTML = '';
+    setContainer.innerHTML = '';
+    
+    // Display individual recommendations
+    const individualTemplate = document.getElementById('individualRecommendationTemplate');
+    data.individual_recommendations.forEach(rec => {
+        const product = rec.product;
+        const clone = individualTemplate.content.cloneNode(true);
+        
+        // 填充基本資訊
+        clone.querySelector('.recommendation-score').textContent = 
+            (rec.score * 100).toFixed(0) + '%';
+        clone.querySelector('.product-name').textContent = product.name;
+        clone.querySelector('.original-price').textContent = 
+            product.original_price.toFixed(2);
+        clone.querySelector('.discount-rate').textContent = 
+            (product.discount_rate * 100).toFixed(0);
+        clone.querySelector('.discounted-price').textContent = 
+            (product.original_price * product.discount_rate).toFixed(2);
+        clone.querySelector('.distance').textContent = rec.distance;
+        
+        // 設置加入購物車按鈕
+        const cartBtn = clone.querySelector('.add-to-cart-btn');
+        if (cartBtn) {
+            cartBtn.setAttribute('onclick', `addToCart(${product.id}, this)`);
+            cartBtn.setAttribute('data-product-id', product.id);
+        }
+        
+        // 填充營養資訊
+        const nutritionInfo = clone.querySelector('.nutrition-info');
+        const nutrition = product.nutrition_info;
+        
+        if (nutrition) {
+            nutritionInfo.innerHTML = `
+                熱量: ${nutrition.energy}kcal<br>
+                蛋白質: ${nutrition.protein}g<br>
+                脂肪: ${nutrition.fat}g<br>
+                碳水化合物: ${nutrition.carbohydrate}g<br>
+                纖維: ${nutrition.fiber}g<br>
+                鈉: ${nutrition.sodium}mg
+            `;
+        }
+        
+        // 設置詳情連結
+        const detailLink = clone.querySelector('.product-detail-link');
+        detailLink.href = `/product/${product.id}`;
+        
+        individualContainer.appendChild(clone);
+    });
+    
+    // Display set recommendations
+    const setTemplate = document.getElementById('setRecommendationTemplate');
+    data.set_recommendations.forEach(set => {
+        const clone = setTemplate.content.cloneNode(true);
+        
+        // 填充套餐分數
+        clone.querySelector('.set-score').textContent = 
+            (set.score * 100).toFixed(0) + '%';
+        
+        // 填充套餐商品
+        const setProducts = clone.querySelector('.set-products');
+        set.products.forEach((product, index) => {
+            setProducts.innerHTML += `
+                <div class="mb-2 d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${index + 1}. ${product.name}</strong><br>
+                        <small class="text-muted">
+                            特價: $${(product.original_price * product.discount_rate).toFixed(2)}
+                        </small>
+                    </div>
+                    {% if current_user.is_authenticated and not current_user.is_store %}
+                    <button class="btn btn-primary btn-sm add-to-cart-btn" 
+                            onclick="addToCart(${product.id}, this)"
+                            data-product-id="${product.id}">
+                        <i class="fas fa-cart-plus"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            `;
+        });
+        
+        // 設置加入所有商品按鈕
+        const addAllBtn = clone.querySelector('.add-all-to-cart-btn');
+        if (addAllBtn) {
+            addAllBtn.onclick = async function() {
+                this.disabled = true;
+                const originalText = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 處理中...';
+                
+                try {
+                    // 依序加入每個商品
+                    for (const product of set.products) {
+                        await fetch(`/add_to_cart/${product.id}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            }
+                        });
+                    }
+                    
+                    // 顯示成功訊息
+                    this.classList.remove('btn-primary');
+                    this.classList.add('btn-success');
+                    this.innerHTML = '<i class="fas fa-check"></i> 已加入所有商品';
+                    
+                    // 3秒後恢復按鈕狀態
+                    setTimeout(() => {
+                        this.classList.remove('btn-success');
+                        this.classList.add('btn-primary');
+                        this.innerHTML = originalText;
+                        this.disabled = false;
+                    }, 3000);
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('加入購物車失敗，請稍後再試');
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                }
+            };
+        }
+        
+        // 填充套餐資訊
+        clone.querySelector('.total-price').textContent = set.total_price.toFixed(2);
+        clone.querySelector('.avg-distance').textContent = set.avg_distance;
+        
+        // 填充營養總量
+        const setNutrition = clone.querySelector('.set-nutrition');
+        const totalNutrition = set.total_nutrition;
+        setNutrition.innerHTML = `
+            熱量: ${totalNutrition.energy.toFixed(0)}kcal<br>
+            蛋白質: ${totalNutrition.protein.toFixed(1)}g<br>
+            脂肪: ${totalNutrition.fat.toFixed(1)}g<br>
+            碳水化合物: ${totalNutrition.carbohydrate.toFixed(1)}g<br>
+            纖維: ${totalNutrition.fiber.toFixed(1)}g<br>
+            鈉: ${totalNutrition.sodium.toFixed(0)}mg
+        `;
+        
+        setContainer.appendChild(clone);
+    });
+    
+    document.getElementById('recommendationsContainer').style.display = 'block';
+    document.getElementById('recommendationsContainer').classList.add('recommendation-reveal');
+}
+
+function addToCart(productId, button) {
+    // 禁用按鈕避免重複點擊
+    button.disabled = true;
+    
+    fetch(`/add_to_cart/${productId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 更新按鈕外觀
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+            
+            // 更新按鈕內容
+            button.innerHTML = `
+                <i class="fas fa-check"></i>
+                <span>已加入購物車</span>
+            `;
+            
+            // 顯示提示訊息
+            const toast = document.createElement('div');
+            toast.className = 'toast position-fixed bottom-0 end-0 m-3';
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+            toast.innerHTML = `
+                <div class="toast-header bg-success text-white">
+                    <i class="fas fa-check me-2"></i>
+                    <strong class="me-auto">成功</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${data.message}
+                </div>
+            `;
+            document.body.appendChild(toast);
+            
+            // 顯示提示訊息
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+            
+            // 移除提示訊息元素
+            toast.addEventListener('hidden.bs.toast', () => {
+                toast.remove();
+            });
+            
+            // 3秒後恢復按鈕狀態
+            setTimeout(() => {
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+                button.innerHTML = `
+                    <i class="fas fa-cart-plus"></i>
+                    <span>加入購物車</span>
+                `;
+                button.disabled = false;
+            }, 3000);
+        } else {
+            // 顯示錯誤訊息
+            alert(data.message);
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('加入購物車失敗，請稍後再試');
+        button.disabled = false;
+    });
+}
+</script>
+{% endblock %} 

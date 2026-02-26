@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">{{ product.name }}</h5>
+                    <p class="card-text">
+                        <strong>店家:</strong> {{ product.store.username }}<br>
+                        <strong>原價:</strong> ${{ "%.2f"|format(product.original_price) }}<br>
+                        <strong>折扣:</strong> {{ "%.0f"|format(product.discount_rate * 100) }}%<br>
+                        <strong>特價:</strong> ${{ "%.2f"|format(product.original_price * product.discount_rate) }}<br>
+                        <strong>數量:</strong> {{ product.quantity }}<br>
+                        <strong>地址:</strong> {{ product.address }}<br>
+                        <strong>期限:</strong> {{ product.expiry_date.strftime('%Y-%m-%d') }}
+                        {% if current_user.is_authenticated and current_user.id == product.store_id %}
+                        <br><strong>購物車人數:</strong> <span class="badge bg-info fs-6">{{ product.cart_count or 0 }} 人已加入購物車</span>
+                        {% endif %}
+                    </p>
+                    {% if current_user.is_authenticated %}
+                        {% if current_user.id == product.store_id %}
+                            <!-- 店家編輯區 -->
+                            <div class="mb-3">
+                                <form action="{{ url_for('edit_product', product_id=product.id) }}" method="POST" class="mb-2">
+                                    <div class="input-group">
+                                        <input type="number" name="quantity" class="form-control" value="{{ product.quantity }}" min="0" required>
+                                        <button type="submit" class="btn btn-primary">更新數量</button>
+                                    </div>
+                                </form>
+                                <form action="{{ url_for('delete_product', product_id=product.id) }}" method="POST" 
+                                      onsubmit="return confirm('確定要下架此商品嗎？');">
+                                    <button type="submit" class="btn btn-danger w-100">下架商品</button>
+                                </form>
+                            </div>
+                        {% elif not current_user.is_store %}
+                            <button class="btn btn-primary add-to-cart-btn" 
+                                onclick="addToCart({{ product.id }}, this)"
+                                data-product-id="{{ product.id }}">
+                                <i class="fas fa-cart-plus"></i>
+                                <span>加入購物車</span>
+                            </button>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 營養成分卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">營養成分表</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <tbody>
+                                <tr>
+                                    <th>熱量</th>
+                                    <td>{{ "%.2f"|format(product.nutrition_info.energy|float) }} kcal</td>
+                                    <th>蛋白質</th>
+                                    <td>{{ "%.2f"|format(product.nutrition_info.protein|float) }} g</td>
+                                </tr>
+                                <tr>
+                                    <th>脂肪</th>
+                                    <td>{{ "%.2f"|format(product.nutrition_info.fat|float) }} g</td>
+                                    <th>碳水化合物</th>
+                                    <td>{{ "%.2f"|format(product.nutrition_info.carbohydrate|float) }} g</td>
+                                </tr>
+                                <tr>
+                                    <th>糖</th>
+                                    <td>{{ "%.2f"|format(product.nutrition_info.sugars|float) }} g</td>
+                                    <th>膳食纖維</th>
+                                    <td>{{ "%.2f"|format(product.nutrition_info.fiber|float) }} g</td>
+                                </tr>
+                                <tr>
+                                    <th>鈉</th>
+                                    <td>{{ "%.2f"|format(product.nutrition_info.sodium|float) }} mg</td>
+                                    <th></th>
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div id="map" class="map-container"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化地圖
+    var map = L.map('map');
+    
+    // 添加 OpenStreetMap 圖層
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    
+    // 如果有經緯度資訊，則顯示標記
+    {% if product.latitude and product.longitude %}
+        var lat = {{ product.latitude }};
+        var lon = {{ product.longitude }};
+        
+        // 設置地圖中心和縮放級別
+        map.setView([lat, lon], 15);
+        
+        // 添加標記
+        L.marker([lat, lon])
+            .addTo(map)
+            .bindPopup("{{ product.name }}<br>{{ product.address }}");
+    {% else %}
+        // 如果沒有經緯度資訊，顯示台灣
+        map.setView([23.5, 121], 7);
+    {% endif %}
+});
+
+function addToCart(productId, button) {
+    // 禁用按鈕避免重複點擊
+    button.disabled = true;
+    
+    fetch(`/add_to_cart/${productId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 更新按鈕外觀
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+            
+            // 更新按鈕內容
+            button.innerHTML = `
+                <i class="fas fa-check"></i>
+                <span>已加入購物車</span>
+            `;
+            
+            // 顯示提示訊息
+            const toast = document.createElement('div');
+            toast.className = 'toast position-fixed bottom-0 end-0 m-3';
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+            toast.innerHTML = `
+                <div class="toast-header bg-success text-white">
+                    <i class="fas fa-check me-2"></i>
+                    <strong class="me-auto">成功</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${data.message}
+                </div>
+            `;
+            document.body.appendChild(toast);
+            
+            // 顯示提示訊息
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+            
+            // 移除提示訊息元素
+            toast.addEventListener('hidden.bs.toast', () => {
+                toast.remove();
+            });
+            
+            // 3秒後恢復按鈕狀態
+            setTimeout(() => {
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+                button.innerHTML = `
+                    <i class="fas fa-cart-plus"></i>
+                    <span>加入購物車</span>
+                `;
+                button.disabled = false;
+            }, 3000);
+        } else {
+            // 顯示錯誤訊息
+            alert(data.message);
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('加入購物車失敗，請稍後再試');
+        button.disabled = false;
+    });
+}
+</script>
+{% endblock %} 

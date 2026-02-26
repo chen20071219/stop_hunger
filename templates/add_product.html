@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                新增即期品
+            </div>
+            <div class="card-body">
+                <form method="POST" id="productForm">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">商品名稱</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">描述您的商品(食材與烹飪方式等)</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="description" name="description" placeholder="例如：炸雞排、清蒸鱈魚...">
+                            <button type="button" class="btn btn-secondary" id="predictNutrition">AI 預測營養成分</button>
+                        </div>
+                        <div class="form-text">用於AI預測營養成分，若未填寫則使用商品名稱</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">數量</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" required min="1">
+                    </div>
+                    <div class="mb-3">
+                        <label for="address" class="form-label">地址</label>
+                        <input type="text" class="form-control" id="address" name="address" required>
+                        <div id="geocodeStatus" class="form-text text-muted mt-2"></div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="latitude" class="form-label">緯度 (可選)</label>
+                                <input type="number" class="form-control" id="latitude" name="latitude" step="0.0000001">
+                                <div class="form-text">如果地址無法自動轉換，可手動填寫</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="longitude" class="form-label">經度 (可選)</label>
+                                <input type="number" class="form-control" id="longitude" name="longitude" step="0.0000001">
+                                <div class="form-text">如果地址無法自動轉換，可手動填寫</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="expiry_date" class="form-label">到期日期</label>
+                        <input type="date" class="form-control" id="expiry_date" name="expiry_date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="original_price" class="form-label">原價</label>
+                        <input type="number" class="form-control" id="original_price" name="original_price" required step="0.01" min="0">
+                    </div>
+                    <div class="mb-3">
+                        <label for="discount_rate" class="form-label">折扣率 (0.1-1.0)</label>
+                        <input type="number" class="form-control" id="discount_rate" name="discount_rate" required step="0.1" min="0.1" max="1" value="0.5">
+                    </div>
+
+                    <!-- 營養成分區塊 -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            營養成分
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="energy" class="form-label">熱量 (kcal)</label>
+                                        <input type="number" class="form-control nutrition-input" id="energy" name="energy" step="0.01" min="0">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="protein" class="form-label">蛋白質 (g)</label>
+                                        <input type="number" class="form-control nutrition-input" id="protein" name="protein" step="0.01" min="0">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="fat" class="form-label">脂肪 (g)</label>
+                                        <input type="number" class="form-control nutrition-input" id="fat" name="fat" step="0.01" min="0">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="carbohydrate" class="form-label">碳水化合物 (g)</label>
+                                        <input type="number" class="form-control nutrition-input" id="carbohydrate" name="carbohydrate" step="0.01" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="fiber" class="form-label">膳食纖維 (g)</label>
+                                        <input type="number" class="form-control nutrition-input" id="fiber" name="fiber" step="0.01" min="0">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="sugars" class="form-label">糖 (g)</label>
+                                        <input type="number" class="form-control nutrition-input" id="sugars" name="sugars" step="0.01" min="0">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="sodium" class="form-label">鈉 (mg)</label>
+                                        <input type="number" class="form-control nutrition-input" id="sodium" name="sodium" step="0.01" min="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">新增商品</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('address').addEventListener('blur', async function() {
+    const address = this.value;
+    if (address) {
+        const statusDiv = document.getElementById('geocodeStatus');
+        statusDiv.textContent = '正在獲取經緯度...';
+        
+        try {
+            const response = await fetch(`/check_coordinates?address=${encodeURIComponent(address)}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                statusDiv.textContent = '✓ 已成功獲取經緯度';
+                statusDiv.className = 'form-text text-success mt-2';
+                document.getElementById('latitude').value = data.latitude;
+                document.getElementById('longitude').value = data.longitude;
+            } else {
+                statusDiv.textContent = '⚠ 無法自動獲取經緯度，請手動填寫';
+                statusDiv.className = 'form-text text-warning mt-2';
+            }
+        } catch (error) {
+            statusDiv.textContent = '⚠ 檢查經緯度時發生錯誤，請手動填寫';
+            statusDiv.className = 'form-text text-danger mt-2';
+        }
+    }
+});
+
+document.getElementById('predictNutrition').addEventListener('click', async function() {
+    const description = document.getElementById('description').value;
+    const name = document.getElementById('name').value;
+    const foodName = description || name;
+    
+    if (!foodName) {
+        alert('請先輸入商品描述或名稱！');
+        return;
+    }
+
+    try {
+        const response = await fetch('/predict_nutrition', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ food_name: foodName })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+            // 填充預測的營養成分
+            document.getElementById('energy').value = data.nutrition.energy;
+            document.getElementById('protein').value = data.nutrition.protein;
+            document.getElementById('fat').value = data.nutrition.fat;
+            document.getElementById('carbohydrate').value = data.nutrition.carbohydrate;
+            document.getElementById('fiber').value = data.nutrition.fiber;
+            document.getElementById('sugars').value = data.nutrition.sugars;
+            document.getElementById('sodium').value = data.nutrition.sodium;
+        } else {
+            alert('無法預測營養成分：' + data.error);
+        }
+    } catch (error) {
+        alert('預測過程中發生錯誤：' + error);
+    }
+});
+</script>
+{% endblock %} 

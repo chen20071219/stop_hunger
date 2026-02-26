@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>購物車</h2>
+    {% if cart_items %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>商品名稱</th>
+                        <th>數量</th>
+                        <th>單價</th>
+                        <th>折扣</th>
+                        <th>小計</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in cart_items %}
+                    <tr>
+                        <td>{{ item.product.name }}</td>
+                        <td>
+                            <div class="input-group" style="max-width: 150px;">
+                                <button class="btn btn-outline-secondary btn-sm" onclick="updateQuantity({{ item.id }}, -1)">-</button>
+                                <input type="number" class="form-control form-control-sm text-center" value="{{ item.quantity }}" min="1" id="quantity-{{ item.id }}" readonly>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="updateQuantity({{ item.id }}, 1)">+</button>
+                            </div>
+                        </td>
+                        <td>{{ "%.2f"|format(item.product.original_price) }}</td>
+                        <td>{{ "%.0f"|format(item.product.discount_rate * 100) }}%</td>
+                        <td>{{ "%.2f"|format(item.product.original_price * item.product.discount_rate * item.quantity) }}</td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" onclick="removeFromCart({{ item.id }})">刪除</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4" class="text-end"><strong>總計：</strong></td>
+                        <td><strong>{{ "%.2f"|format(total_price) }}</strong></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            您的購物車是空的
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function updateQuantity(itemId, change) {
+    fetch(`/update_cart/${itemId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ change: change })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert(data.message);
+        }
+    });
+}
+
+function removeFromCart(itemId) {
+    if (confirm('確定要從購物車中移除此商品嗎？')) {
+        fetch(`/remove_from_cart/${itemId}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message);
+            }
+        });
+    }
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    註冊
+                </div>
+                <div class="card-body">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">使用者名稱</label>
+                            <input type="text" class="form-control" id="username" name="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">電子郵件</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">密碼</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="gender" class="form-label">性別</label>
+                            <select class="form-select" id="gender" name="gender" required>
+                                <option value="">請選擇性別</option>
+                                <option value="M">男性</option>
+                                <option value="F">女性</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="birthdate" class="form-label">生日</label>
+                            <input type="date" class="form-control" id="birthdate" name="birthdate" required>
+                            <div class="form-text">用於計算個人化營養需求</div>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="is_store" name="is_store">
+                            <label class="form-check-label" for="is_store">註冊為商家帳號</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">註冊</button>
+                        <a href="{{ url_for('login') }}" class="btn btn-link">已有帳號？登入</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 設定日期選擇器的最大值為今天
+document.addEventListener('DOMContentLoaded', function() {
+    var today = new Date();
+    var dd = String(today.getDate()).padStart(2, '0');
+    var mm = String(today.getMonth() + 1).padStart(2, '0');
+    var yyyy = today.getFullYear();
+    today = yyyy + '-' + mm + '-' + dd;
+    document.getElementById('birthdate').max = today;
+});
+</script>
+{% endblock %} 
